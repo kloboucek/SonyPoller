@@ -28,7 +28,7 @@ class Config:
             ha_token=require_env("HA_TOKEN"),
             ha_entity_id=os.getenv("HA_ENTITY_ID", "sensor.sony_tv_playback_state"),
             poll_interval=float(os.getenv("POLL_INTERVAL", "1")),
-            adb_timeout=float(os.getenv("ADB_TIMEOUT", "5")),
+            adb_timeout=float(os.getenv("ADB_TIMEOUT", "2")),
             update_on_change_only=os.getenv("UPDATE_ON_CHANGE_ONLY", "true").lower() in TRUE_VALUES,
             unknown_after_failures=int(os.getenv("UNKNOWN_AFTER_FAILURES", "3")),
             health_port=int(os.getenv("HEALTH_PORT", "8080")),

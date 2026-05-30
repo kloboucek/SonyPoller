@@ -102,6 +102,7 @@ States are:
 
 - `playing`
 - `paused`
+- `idle`
 - `unknown`
 
 You can then use `sensor.sony_tv_playback_state` in dashboards, automations, templates, and history.
@@ -242,7 +243,7 @@ docker exec -it sonypoller adb -s TV_IP_ADDRESS:5555 shell dumpsys media_session
 - `HA_TOKEN`: Home Assistant long-lived access token. Never commit this.
 - `HA_ENTITY_ID`: Sensor to create/update. Default: `sensor.sony_tv_playback_state`.
 - `POLL_INTERVAL`: Seconds between polls. Default: `1`.
-- `ADB_TIMEOUT`: ADB command timeout in seconds. Default: `5`.
+- `ADB_TIMEOUT`: ADB command timeout in seconds. Default: `2`.
 - `UPDATE_ON_CHANGE_ONLY`: Post to HA only when the state changes. Default: `true`.
 - `UNKNOWN_AFTER_FAILURES`: Number of failed polls before publishing `unknown`. Default: `3`.
 - `HEALTH_PORT`: Container health endpoint port. Default: `8080`.

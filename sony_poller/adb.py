@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import logging
+import re
 import subprocess
 from dataclasses import dataclass
 
 log = logging.getLogger(__name__)
 
-PLAY_HINTS = ("state=PlaybackState", "state=3", "PLAYING", "mCurrentFocus")
-PAUSE_HINTS = ("state=2", "PAUSED", "STOPPED", "state=1")
+PLAYING_STATES = {3, 6, 8}  # PLAYING, BUFFERING, CONNECTING
+PAUSED_STATES = {2}
+IDLE_STATES = {0, 1}  # NONE, STOPPED
 
 
 @dataclass
@@ -66,14 +68,29 @@ class AdbClient:
 
 
 def parse_media_session(output: str) -> str:
+    state = extract_playback_state(output)
+    if state in PLAYING_STATES:
+        return "playing"
+    if state in PAUSED_STATES:
+        return "paused"
+    if state in IDLE_STATES:
+        return "idle"
+
     text = output.upper()
-    # Android PlaybackState state=3 means playing. This is the strongest signal.
-    if "STATE=PLAYBACKSTATE" in text and "STATE=3" in text:
-        return "playing"
-    if "PLAYBACKSTATE" in text and "STATE=3" in text:
-        return "playing"
     if "PLAYING" in text:
         return "playing"
-    if "STATE=2" in text or "PAUSED" in text or "STOPPED" in text or "STATE=1" in text:
+    if "PAUSED" in text:
         return "paused"
+    if "STOPPED" in text or "STATE_NONE" in text:
+        return "idle"
     return "unknown"
+
+
+def extract_playback_state(output: str) -> int | None:
+    """Extract Android PlaybackState numeric state from dumpsys media_session output."""
+    matches = re.findall(r"PlaybackState\s*\{[^}]*state=(\d+)", output, flags=re.IGNORECASE)
+    if not matches:
+        matches = re.findall(r"state=(\d+)", output, flags=re.IGNORECASE)
+    if not matches:
+        return None
+    return int(matches[0])

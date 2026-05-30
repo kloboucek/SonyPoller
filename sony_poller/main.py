@@ -24,13 +24,16 @@ class Poller:
     consecutive_failures: int = 0
 
     def tick(self) -> None:
+        started = time.monotonic()
         self.health.update(polls=self.health.snapshot().get("polls", 0) + 1)
         state = self.adb.playback_state()
+        poll_duration_ms = round((time.monotonic() - started) * 1000, 1)
         if state == "unknown":
             self.consecutive_failures += 1
             self.health.update(
                 ok=False,
                 playback_state="unknown",
+                poll_duration_ms=poll_duration_ms,
                 consecutive_failures=self.consecutive_failures,
                 last_error="Unable to determine playback state",
             )
@@ -42,6 +45,7 @@ class Poller:
         self.health.update(
             ok=True,
             playback_state=state,
+            poll_duration_ms=poll_duration_ms,
             consecutive_failures=0,
             last_error=None,
         )
@@ -92,6 +96,7 @@ def main() -> int:
     log.info("Starting SonyPoller for %s -> %s", config.tv_adb_host, config.ha_entity_id)
     adb.connect()
 
+    next_poll = time.monotonic()
     while not stop:
         try:
             poller.tick()
@@ -99,7 +104,11 @@ def main() -> int:
             log.exception("Poll failed: %s", exc)
             health.update(ok=False, last_error=str(exc))
             adb.connect()
-        time.sleep(config.poll_interval)
+        next_poll += config.poll_interval
+        sleep_for = max(0.0, next_poll - time.monotonic())
+        if sleep_for == 0.0:
+            next_poll = time.monotonic()
+        time.sleep(sleep_for)
 
     server.shutdown()
     server.server_close()

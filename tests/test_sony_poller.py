@@ -34,6 +34,14 @@ class SonyPollerTests(unittest.TestCase):
         output = "Sessions Stack - PlaybackState {state=2, position=123}"
         self.assertEqual(parse_media_session(output), "paused")
 
+    def test_parse_idle_state(self):
+        output = "Sessions Stack - PlaybackState {state=1, position=123}"
+        self.assertEqual(parse_media_session(output), "idle")
+
+    def test_parse_buffering_as_playing(self):
+        output = "Sessions Stack - PlaybackState {state=6, position=123}"
+        self.assertEqual(parse_media_session(output), "playing")
+
     def test_parse_unknown_state(self):
         self.assertEqual(parse_media_session("no useful media session"), "unknown")
 
