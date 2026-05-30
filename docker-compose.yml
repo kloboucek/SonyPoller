@@ -1,0 +1,14 @@
+services:
+  sonypoller:
+    build: .
+    image: sonypoller:latest
+    container_name: sonypoller
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      HOME: /adb
+    volumes:
+      - ./adb:/adb
+    ports:
+      - "127.0.0.1:${HEALTH_PORT:-8080}:8080"
