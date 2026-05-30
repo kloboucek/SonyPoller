@@ -106,6 +106,75 @@ States are:
 
 You can then use `sensor.sony_tv_playback_state` in dashboards, automations, templates, and history.
 
+### 3. Example automations
+
+These examples mirror the common use case: dimming or switching lights around TV playback. Replace the entity IDs with your own light and TV entities.
+
+Turn a lamp off when playback starts:
+
+```yaml
+alias: Turn off lamp when TV changes to playing
+trigger:
+  - platform: state
+    entity_id: sensor.sony_tv_playback_state
+    to: playing
+condition:
+  - condition: time
+    after: "19:00:00"
+    before: "06:00:00"
+action:
+  - service: light.turn_off
+    target:
+      entity_id: light.your_lamp
+mode: single
+```
+
+Turn a lamp on when playback pauses or goes idle:
+
+```yaml
+alias: Turn on lamp when TV changes to paused or idle
+trigger:
+  - platform: state
+    entity_id: sensor.sony_tv_playback_state
+    to: paused
+  - platform: state
+    entity_id: sensor.sony_tv_playback_state
+    to: idle
+condition:
+  - condition: time
+    after: "19:00:00"
+    before: "06:00:00"
+  - condition: not
+    conditions:
+      - condition: state
+        entity_id: media_player.your_android_tv
+        state: "off"
+action:
+  - service: light.turn_on
+    target:
+      entity_id: light.your_lamp
+mode: single
+```
+
+Turn the lamp off when the TV turns off:
+
+```yaml
+alias: Turn off lamp when TV is turned off
+trigger:
+  - platform: state
+    entity_id: media_player.your_android_tv
+    to: "off"
+condition:
+  - condition: state
+    entity_id: light.your_lamp
+    state: "on"
+action:
+  - service: light.turn_off
+    target:
+      entity_id: light.your_lamp
+mode: single
+```
+
 ## Sony/Android TV setup
 
 ### 1. Enable Developer Options
