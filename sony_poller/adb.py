@@ -19,6 +19,13 @@ class AdbResult:
     stderr: str = ""
 
 
+@dataclass(frozen=True)
+class TvPowerState:
+    power: str
+    display_state: str = "UNKNOWN"
+    wakefulness: str = "Unknown"
+
+
 class AdbClient:
     def __init__(self, host: str, timeout: float = 5.0) -> None:
         self.host = host
@@ -66,6 +73,14 @@ class AdbClient:
             return "unknown"
         return parse_media_session(result.stdout)
 
+    def power_state(self) -> TvPowerState:
+        """Return TV power/display state using Android power/display dumpsys output."""
+        result = self.run("shell", "sh", "-c", "dumpsys power; dumpsys display")
+        if not result.ok:
+            log.debug("ADB power/display state failed: %s", result.stderr.strip())
+            return TvPowerState("unknown")
+        return parse_power_state(result.stdout)
+
 
 def parse_media_session(output: str) -> str:
     state = extract_playback_state(output)
@@ -84,6 +99,31 @@ def parse_media_session(output: str) -> str:
     if "STOPPED" in text or "STATE_NONE" in text:
         return "idle"
     return "unknown"
+
+
+def parse_power_state(output: str) -> TvPowerState:
+    wakefulness = extract_first(r"mWakefulness=([A-Za-z]+)", output) or "Unknown"
+    display_state = (
+        extract_first(r"Display State=([A-Z]+)", output)
+        or extract_first(r"\bmState=([A-Z]+)", output)
+        or "UNKNOWN"
+    )
+    display_upper = display_state.upper()
+    wake_upper = wakefulness.upper()
+    if display_upper == "OFF" or wake_upper in {"ASLEEP", "DOZING"}:
+        power = "off"
+    elif display_upper == "ON" or wake_upper == "AWAKE":
+        power = "on"
+    else:
+        power = "unknown"
+    return TvPowerState(power, display_upper, wakefulness)
+
+
+def extract_first(pattern: str, output: str) -> str | None:
+    match = re.search(pattern, output, flags=re.IGNORECASE)
+    if not match:
+        return None
+    return match.group(1)
 
 
 def extract_playback_state(output: str) -> int | None:

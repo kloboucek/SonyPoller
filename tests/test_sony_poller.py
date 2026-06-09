@@ -3,7 +3,7 @@ import os
 import unittest
 from unittest.mock import patch
 
-from sony_poller.adb import parse_media_session
+from sony_poller.adb import TvPowerState, parse_media_session, parse_power_state
 from sony_poller.config import Config
 from sony_poller.home_assistant import icon_for_state
 from sony_poller.main import Poller
@@ -16,6 +16,23 @@ class DummyAdb:
 
     def playback_state(self):
         return self.states.pop(0)
+
+    def power_state(self):
+        return TvPowerState("on", "ON", "Awake")
+
+
+class DummyPowerAwareAdb:
+    def __init__(self, power_states, playback_states):
+        self.power_states = list(power_states)
+        self.playback_states = list(playback_states)
+        self.playback_calls = 0
+
+    def power_state(self):
+        return self.power_states.pop(0)
+
+    def playback_state(self):
+        self.playback_calls += 1
+        return self.playback_states.pop(0)
 
 
 class DummyHa:
@@ -45,6 +62,18 @@ class SonyPollerTests(unittest.TestCase):
 
     def test_parse_unknown_state(self):
         self.assertEqual(parse_media_session("no useful media session"), "unknown")
+
+    def test_parse_power_state_off_from_display_state(self):
+        power = parse_power_state("mWakefulness=Asleep\nDisplay State=OFF\nmState=OFF")
+        self.assertEqual(power.power, "off")
+        self.assertEqual(power.display_state, "OFF")
+        self.assertEqual(power.wakefulness, "Asleep")
+
+    def test_parse_power_state_on_from_awake_display(self):
+        power = parse_power_state("mWakefulness=Awake\nDisplay State=ON\nmState=ON")
+        self.assertEqual(power.power, "on")
+        self.assertEqual(power.display_state, "ON")
+        self.assertEqual(power.wakefulness, "Awake")
 
     def test_icons(self):
         self.assertEqual(icon_for_state("playing"), "mdi:play-circle")
@@ -83,6 +112,45 @@ class SonyPollerTests(unittest.TestCase):
         poller.tick()
         poller.tick()
         self.assertEqual([call[0] for call in ha.calls], ["playing", "paused"])
+
+    def test_poller_publishes_off_when_tv_power_is_off_without_checking_playback(self):
+        config = Config(
+            tv_adb_host="tv:5555",
+            ha_url="http://ha",
+            ha_token="token",
+            ha_entity_id="sensor.sony",
+            update_on_change_only=True,
+        )
+        ha = DummyHa()
+        adb = DummyPowerAwareAdb([TvPowerState("off", "OFF", "Asleep")], ["playing"])
+        poller = Poller(adb, ha, HealthState(), config)  # type: ignore[arg-type]
+
+        poller.tick()
+
+        self.assertEqual([call[0] for call in ha.calls], ["off"])
+        self.assertEqual(adb.playback_calls, 0)
+        self.assertEqual(ha.calls[0][1]["tv_power_state"], "off")
+        self.assertEqual(ha.calls[0][1]["display_state"], "OFF")
+        self.assertEqual(ha.calls[0][1]["wakefulness"], "Asleep")
+
+    def test_poller_keeps_idle_when_tv_power_is_on(self):
+        config = Config(
+            tv_adb_host="tv:5555",
+            ha_url="http://ha",
+            ha_token="token",
+            ha_entity_id="sensor.sony",
+            update_on_change_only=True,
+        )
+        ha = DummyHa()
+        adb = DummyPowerAwareAdb([TvPowerState("on", "ON", "Awake")], ["idle"])
+        poller = Poller(adb, ha, HealthState(), config)  # type: ignore[arg-type]
+
+        poller.tick()
+
+        self.assertEqual([call[0] for call in ha.calls], ["idle"])
+        self.assertEqual(ha.calls[0][1]["tv_power_state"], "on")
+        self.assertEqual(ha.calls[0][1]["display_state"], "ON")
+        self.assertEqual(ha.calls[0][1]["wakefulness"], "Awake")
 
     def test_unknown_published_after_threshold(self):
         config = Config(

@@ -6,7 +6,7 @@ import sys
 import time
 from dataclasses import dataclass
 
-from .adb import AdbClient
+from .adb import AdbClient, TvPowerState
 from .config import Config
 from .health import HealthState, start_health_server
 from .home_assistant import HomeAssistantClient
@@ -26,13 +26,21 @@ class Poller:
     def tick(self) -> None:
         started = time.monotonic()
         self.health.update(polls=self.health.snapshot().get("polls", 0) + 1)
-        state = self.adb.playback_state()
+        power = self.adb.power_state()
+        if power.power == "off":
+            state = "off"
+        else:
+            state = self.adb.playback_state()
         poll_duration_ms = round((time.monotonic() - started) * 1000, 1)
+        attributes = self._power_attributes(power)
         if state == "unknown":
             self.consecutive_failures += 1
             self.health.update(
                 ok=False,
                 playback_state="unknown",
+                tv_power_state=power.power,
+                display_state=power.display_state,
+                wakefulness=power.wakefulness,
                 poll_duration_ms=poll_duration_ms,
                 consecutive_failures=self.consecutive_failures,
                 last_error="Unable to determine playback state",
@@ -51,7 +59,7 @@ class Poller:
                     self.consecutive_failures,
                 )
             if self.consecutive_failures >= self.config.unknown_after_failures:
-                self._send_state("unknown")
+                self._send_state("unknown", attributes)
             return
 
         if self.consecutive_failures:
@@ -60,24 +68,33 @@ class Poller:
         self.health.update(
             ok=True,
             playback_state=state,
+            tv_power_state=power.power,
+            display_state=power.display_state,
+            wakefulness=power.wakefulness,
             poll_duration_ms=poll_duration_ms,
             consecutive_failures=0,
             last_error=None,
         )
-        self._send_state(state)
+        self._send_state(state, attributes)
 
-    def _send_state(self, state: str) -> None:
+    def _power_attributes(self, power: TvPowerState) -> dict[str, object]:
+        return {
+            "tv_power_state": power.power,
+            "display_state": power.display_state,
+            "wakefulness": power.wakefulness,
+        }
+
+    def _send_state(self, state: str, attributes: dict[str, object] | None = None) -> None:
         if self.config.update_on_change_only and state == self.last_sent_state:
             log.debug("State unchanged (%s); skipping HA update", state)
             return
-        self.ha.update_state(
-            state,
-            {
-                "source": "SonyPoller",
-                "tv_adb_host": self.config.tv_adb_host,
-                "update_on_change_only": self.config.update_on_change_only,
-            },
-        )
+        merged_attributes = {
+            "source": "SonyPoller",
+            "tv_adb_host": self.config.tv_adb_host,
+            "update_on_change_only": self.config.update_on_change_only,
+            **(attributes or {}),
+        }
+        self.ha.update_state(state, merged_attributes)
         self.last_sent_state = state
 
 
