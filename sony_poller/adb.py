@@ -75,7 +75,7 @@ class AdbClient:
 
     def power_state(self) -> TvPowerState:
         """Return TV power/display state using Android power/display dumpsys output."""
-        result = self.run("shell", "sh", "-c", "dumpsys power; dumpsys display")
+        result = self.run("shell", "dumpsys", "power")
         if not result.ok:
             log.debug("ADB power/display state failed: %s", result.stderr.strip())
             return TvPowerState("unknown")
