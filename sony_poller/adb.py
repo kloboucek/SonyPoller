@@ -62,7 +62,7 @@ class AdbClient:
         """Return playing/paused/unknown using Android media-session output."""
         result = self.run("shell", "dumpsys", "media_session")
         if not result.ok:
-            log.warning("ADB media_session failed: %s", result.stderr.strip())
+            log.debug("ADB media_session failed: %s", result.stderr.strip())
             return "unknown"
         return parse_media_session(result.stdout)
 

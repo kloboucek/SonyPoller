@@ -37,10 +37,25 @@ class Poller:
                 consecutive_failures=self.consecutive_failures,
                 last_error="Unable to determine playback state",
             )
+            if self.consecutive_failures == self.config.unknown_after_failures:
+                log.warning(
+                    "ADB playback state unknown for %s consecutive polls; publishing unknown",
+                    self.consecutive_failures,
+                )
+            elif (
+                self.consecutive_failures > self.config.unknown_after_failures
+                and self.consecutive_failures % self.config.unknown_after_failures == 0
+            ):
+                log.warning(
+                    "ADB playback state still unknown after %s consecutive polls",
+                    self.consecutive_failures,
+                )
             if self.consecutive_failures >= self.config.unknown_after_failures:
                 self._send_state("unknown")
             return
 
+        if self.consecutive_failures:
+            log.info("ADB playback state recovered after %s failed poll(s)", self.consecutive_failures)
         self.consecutive_failures = 0
         self.health.update(
             ok=True,

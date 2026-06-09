@@ -1,3 +1,4 @@
+import logging
 import os
 import unittest
 from unittest.mock import patch
@@ -93,10 +94,55 @@ class SonyPollerTests(unittest.TestCase):
             unknown_after_failures=2,
         )
         ha = DummyHa()
-        poller = Poller(DummyAdb(["unknown", "unknown"]), ha, HealthState(), config)
+        poller = Poller(DummyAdb(["unknown", "unknown"]), ha, HealthState(), config)  # type: ignore[arg-type]
         poller.tick()
         poller.tick()
         self.assertEqual([call[0] for call in ha.calls], ["unknown"])
+
+    def test_transient_unknown_does_not_warn_or_publish(self):
+        config = Config(
+            tv_adb_host="tv:5555",
+            ha_url="http://ha",
+            ha_token="token",
+            ha_entity_id="sensor.sony",
+            update_on_change_only=True,
+            unknown_after_failures=3,
+        )
+        ha = DummyHa()
+        poller = Poller(DummyAdb(["unknown", "playing"]), ha, HealthState(), config)  # type: ignore[arg-type]
+        logger = logging.getLogger("sony_poller.main")
+        records = []
+
+        class Handler(logging.Handler):
+            def emit(self, record):
+                records.append(record)
+
+        handler = Handler(level=logging.WARNING)
+        logger.addHandler(handler)
+        try:
+            poller.tick()
+            poller.tick()
+        finally:
+            logger.removeHandler(handler)
+
+        self.assertEqual([call[0] for call in ha.calls], ["playing"])
+        self.assertEqual([r for r in records if r.levelno >= logging.WARNING], [])
+
+    def test_sustained_unknown_logs_warning_at_threshold(self):
+        config = Config(
+            tv_adb_host="tv:5555",
+            ha_url="http://ha",
+            ha_token="token",
+            ha_entity_id="sensor.sony",
+            update_on_change_only=True,
+            unknown_after_failures=2,
+        )
+        ha = DummyHa()
+        poller = Poller(DummyAdb(["unknown", "unknown"]), ha, HealthState(), config)  # type: ignore[arg-type]
+        with self.assertLogs("sony_poller.main", level="WARNING") as captured:
+            poller.tick()
+            poller.tick()
+        self.assertIn("publishing unknown", "\n".join(captured.output))
 
 
 if __name__ == "__main__":
