@@ -78,6 +78,7 @@ class SonyPollerTests(unittest.TestCase):
     def test_icons(self):
         self.assertEqual(icon_for_state("playing"), "mdi:play-circle")
         self.assertEqual(icon_for_state("paused"), "mdi:pause-circle")
+        self.assertEqual(icon_for_state("off"), "mdi:television-off")
         self.assertEqual(icon_for_state("unknown"), "mdi:help-circle")
 
     @patch.dict(

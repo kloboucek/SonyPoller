@@ -41,4 +41,6 @@ def icon_for_state(state: str) -> str:
         return "mdi:play-circle"
     if state == "paused":
         return "mdi:pause-circle"
+    if state == "off":
+        return "mdi:television-off"
     return "mdi:help-circle"
