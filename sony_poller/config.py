@@ -17,6 +17,7 @@ class Config:
     adb_timeout: float = 5.0
     update_on_change_only: bool = True
     unknown_after_failures: int = 3
+    state_stability_seconds: float = 0.5
     health_port: int = 8080
     log_level: str = "INFO"
 
@@ -31,6 +32,7 @@ class Config:
             adb_timeout=float(os.getenv("ADB_TIMEOUT", "2")),
             update_on_change_only=os.getenv("UPDATE_ON_CHANGE_ONLY", "true").lower() in TRUE_VALUES,
             unknown_after_failures=int(os.getenv("UNKNOWN_AFTER_FAILURES", "3")),
+            state_stability_seconds=float(os.getenv("STATE_STABILITY_SECONDS", "0.5")),
             health_port=int(os.getenv("HEALTH_PORT", "8080")),
             log_level=os.getenv("LOG_LEVEL", "INFO").upper(),
         )

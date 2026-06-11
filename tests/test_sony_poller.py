@@ -118,6 +118,7 @@ class SonyPollerTests(unittest.TestCase):
             ha_token="token",
             ha_entity_id="sensor.sony",
             update_on_change_only=True,
+            state_stability_seconds=0,
         )
         ha = DummyHa()
         poller = Poller(DummyAdb(["playing", "playing", "paused"]), ha, HealthState(), config)
@@ -133,6 +134,7 @@ class SonyPollerTests(unittest.TestCase):
             ha_token="token",
             ha_entity_id="sensor.sony",
             update_on_change_only=True,
+            state_stability_seconds=0,
         )
         ha = DummyHa()
         adb = DummyPowerAwareAdb([TvPowerState("off", "OFF", "Asleep")], ["playing"])
@@ -153,6 +155,7 @@ class SonyPollerTests(unittest.TestCase):
             ha_token="token",
             ha_entity_id="sensor.sony",
             update_on_change_only=True,
+            state_stability_seconds=0,
         )
         ha = DummyHa()
         adb = DummyPowerAwareAdb([TvPowerState("on", "ON", "Awake")], ["idle"])
@@ -165,6 +168,52 @@ class SonyPollerTests(unittest.TestCase):
         self.assertEqual(ha.calls[0][1]["display_state"], "ON")
         self.assertEqual(ha.calls[0][1]["wakefulness"], "Awake")
 
+    def test_transient_state_change_must_survive_stability_check(self):
+        config = Config(
+            tv_adb_host="tv:5555",
+            ha_url="http://ha",
+            ha_token="token",
+            ha_entity_id="sensor.sony",
+            update_on_change_only=True,
+            state_stability_seconds=0.5,
+        )
+        ha = DummyHa()
+        adb = DummyPowerAwareAdb(
+            [TvPowerState("on", "ON", "Awake"), TvPowerState("off", "OFF", "Asleep")],
+            ["idle"],
+        )
+        poller = Poller(adb, ha, HealthState(), config)  # type: ignore[arg-type]
+        poller.last_sent_state = "off"
+
+        with patch("sony_poller.main.time.sleep") as sleep:
+            poller.tick()
+
+        sleep.assert_called_once_with(0.5)
+        self.assertEqual(ha.calls, [])
+
+    def test_stable_state_change_is_published_after_stability_check(self):
+        config = Config(
+            tv_adb_host="tv:5555",
+            ha_url="http://ha",
+            ha_token="token",
+            ha_entity_id="sensor.sony",
+            update_on_change_only=True,
+            state_stability_seconds=0.5,
+        )
+        ha = DummyHa()
+        adb = DummyPowerAwareAdb(
+            [TvPowerState("on", "ON", "Awake"), TvPowerState("on", "ON", "Awake")],
+            ["playing", "playing"],
+        )
+        poller = Poller(adb, ha, HealthState(), config)  # type: ignore[arg-type]
+        poller.last_sent_state = "off"
+
+        with patch("sony_poller.main.time.sleep") as sleep:
+            poller.tick()
+
+        sleep.assert_called_once_with(0.5)
+        self.assertEqual([call[0] for call in ha.calls], ["playing"])
+
     def test_unknown_published_after_threshold(self):
         config = Config(
             tv_adb_host="tv:5555",
@@ -173,6 +222,7 @@ class SonyPollerTests(unittest.TestCase):
             ha_entity_id="sensor.sony",
             update_on_change_only=True,
             unknown_after_failures=2,
+            state_stability_seconds=0,
         )
         ha = DummyHa()
         poller = Poller(DummyAdb(["unknown", "unknown"]), ha, HealthState(), config)  # type: ignore[arg-type]
@@ -188,6 +238,7 @@ class SonyPollerTests(unittest.TestCase):
             ha_entity_id="sensor.sony",
             update_on_change_only=True,
             unknown_after_failures=3,
+            state_stability_seconds=0,
         )
         ha = DummyHa()
         poller = Poller(DummyAdb(["unknown", "playing"]), ha, HealthState(), config)  # type: ignore[arg-type]
@@ -217,6 +268,7 @@ class SonyPollerTests(unittest.TestCase):
             ha_entity_id="sensor.sony",
             update_on_change_only=True,
             unknown_after_failures=2,
+            state_stability_seconds=0,
         )
         ha = DummyHa()
         poller = Poller(DummyAdb(["unknown", "unknown"]), ha, HealthState(), config)  # type: ignore[arg-type]

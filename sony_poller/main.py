@@ -26,11 +26,7 @@ class Poller:
     def tick(self) -> None:
         started = time.monotonic()
         self.health.update(polls=self.health.snapshot().get("polls", 0) + 1)
-        power = self.adb.power_state()
-        if power.power == "off":
-            state = "off"
-        else:
-            state = self.adb.playback_state()
+        state, power = self._read_adb_state()
         poll_duration_ms = round((time.monotonic() - started) * 1000, 1)
         attributes = self._power_attributes(power)
         if state == "unknown":
@@ -75,7 +71,37 @@ class Poller:
             consecutive_failures=0,
             last_error=None,
         )
-        self._send_state(state, attributes)
+        stable_state, stable_attributes = self._stable_state(state, attributes)
+        if stable_state is not None:
+            self._send_state(stable_state, stable_attributes)
+
+    def _read_adb_state(self) -> tuple[str, TvPowerState]:
+        power = self.adb.power_state()
+        if power.power == "off":
+            return "off", power
+        return self.adb.playback_state(), power
+
+    def _stable_state(
+        self, state: str, attributes: dict[str, object]
+    ) -> tuple[str | None, dict[str, object] | None]:
+        if (
+            not self.config.update_on_change_only
+            or state == self.last_sent_state
+            or self.config.state_stability_seconds <= 0
+        ):
+            return state, attributes
+
+        time.sleep(self.config.state_stability_seconds)
+        confirmed_state, confirmed_power = self._read_adb_state()
+        if confirmed_state != state:
+            log.info(
+                "Ignoring transient ADB state %s -> %s after %.3fs stability check",
+                state,
+                confirmed_state,
+                self.config.state_stability_seconds,
+            )
+            return None, None
+        return state, self._power_attributes(confirmed_power)
 
     def _power_attributes(self, power: TvPowerState) -> dict[str, object]:
         return {
