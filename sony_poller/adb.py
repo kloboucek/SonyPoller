@@ -98,6 +98,11 @@ def parse_media_session(output: str) -> str:
         return "paused"
     if "STOPPED" in text or "STATE_NONE" in text:
         return "idle"
+    # Sony/Android TV can report an inactive media session as state=null when the TV
+    # is awake but no app is actively playing. That is an idle TV, not a sensor
+    # failure; publishing unknown here breaks transition-based HA automations.
+    if "SESSIONS STACK" in text and ("STATE=NULL" in text or "ACTIVE=FALSE" in text):
+        return "idle"
     return "unknown"
 
 

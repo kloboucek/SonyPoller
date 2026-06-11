@@ -63,6 +63,17 @@ class SonyPollerTests(unittest.TestCase):
     def test_parse_unknown_state(self):
         self.assertEqual(parse_media_session("no useful media session"), "unknown")
 
+    def test_parse_inactive_null_session_as_idle(self):
+        output = """
+        Sessions Stack - have 1 sessions:
+          Netflix media session com.netflix.ninja/Netflix media session (userId=0)
+            active=false
+            state=null
+        Audio playback (lastly played comes first)
+          uid=10172 packages=com.plexapp.android
+        """
+        self.assertEqual(parse_media_session(output), "idle")
+
     def test_parse_power_state_off_from_display_state(self):
         power = parse_power_state("mWakefulness=Asleep\nDisplay State=OFF\nmState=OFF")
         self.assertEqual(power.power, "off")
@@ -78,6 +89,7 @@ class SonyPollerTests(unittest.TestCase):
     def test_icons(self):
         self.assertEqual(icon_for_state("playing"), "mdi:play-circle")
         self.assertEqual(icon_for_state("paused"), "mdi:pause-circle")
+        self.assertEqual(icon_for_state("idle"), "mdi:television")
         self.assertEqual(icon_for_state("off"), "mdi:television-off")
         self.assertEqual(icon_for_state("unknown"), "mdi:help-circle")
 
