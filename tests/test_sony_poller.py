@@ -35,6 +35,21 @@ class DummyPowerAwareAdb:
         return self.playback_states.pop(0)
 
 
+class DummyReconnectAdb:
+    def __init__(self):
+        self.connect_calls = 0
+
+    def power_state(self):
+        return TvPowerState("unknown")
+
+    def playback_state(self):
+        return "unknown"
+
+    def connect(self):
+        self.connect_calls += 1
+        return True
+
+
 class DummyHa:
     def __init__(self):
         self.calls = []
@@ -276,6 +291,45 @@ class SonyPollerTests(unittest.TestCase):
             poller.tick()
             poller.tick()
         self.assertIn("publishing unknown", "\n".join(captured.output))
+
+    def test_reconnects_after_repeated_unknown_polls(self):
+        config = Config(
+            tv_adb_host="tv:5555",
+            ha_url="http://ha",
+            ha_token="token",
+            ha_entity_id="sensor.sony",
+            update_on_change_only=True,
+            unknown_after_failures=2,
+            reconnect_after_failures=2,
+            state_stability_seconds=0,
+        )
+        ha = DummyHa()
+        adb = DummyReconnectAdb()
+        poller = Poller(adb, ha, HealthState(), config)  # type: ignore[arg-type]
+
+        poller.tick()
+        poller.tick()
+
+        self.assertEqual(adb.connect_calls, 1)
+        self.assertEqual([call[0] for call in ha.calls], ["unknown"])
+
+    def test_force_update_republishes_unchanged_state(self):
+        config = Config(
+            tv_adb_host="tv:5555",
+            ha_url="http://ha",
+            ha_token="token",
+            ha_entity_id="sensor.sony",
+            update_on_change_only=True,
+            force_update_interval=60,
+            state_stability_seconds=0,
+        )
+        ha = DummyHa()
+        poller = Poller(DummyAdb(["playing", "playing"]), ha, HealthState(), config)
+        poller.tick()
+        poller.last_sent_at -= 61
+        poller.tick()
+
+        self.assertEqual([call[0] for call in ha.calls], ["playing", "playing"])
 
 
 if __name__ == "__main__":

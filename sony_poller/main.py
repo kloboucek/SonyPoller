@@ -21,6 +21,7 @@ class Poller:
     health: HealthState
     config: Config
     last_sent_state: str | None = None
+    last_sent_at: float = 0.0
     consecutive_failures: int = 0
 
     def tick(self) -> None:
@@ -54,6 +55,12 @@ class Poller:
                     "ADB playback state still unknown after %s consecutive polls",
                     self.consecutive_failures,
                 )
+            if (
+                self.config.reconnect_after_failures > 0
+                and self.consecutive_failures % self.config.reconnect_after_failures == 0
+            ):
+                log.info("Attempting ADB reconnect after %s failed poll(s)", self.consecutive_failures)
+                self.adb.connect()
             if self.consecutive_failures >= self.config.unknown_after_failures:
                 self._send_state("unknown", attributes)
             return
@@ -111,9 +118,18 @@ class Poller:
         }
 
     def _send_state(self, state: str, attributes: dict[str, object] | None = None) -> None:
-        if self.config.update_on_change_only and state == self.last_sent_state:
+        now = time.monotonic()
+        unchanged = state == self.last_sent_state
+        force_due = (
+            self.config.force_update_interval > 0
+            and self.last_sent_at > 0
+            and now - self.last_sent_at >= self.config.force_update_interval
+        )
+        if self.config.update_on_change_only and unchanged and not force_due:
             log.debug("State unchanged (%s); skipping HA update", state)
             return
+        if unchanged and force_due:
+            log.info("Force-updating unchanged HA state %s after %.0fs", state, now - self.last_sent_at)
         merged_attributes = {
             "source": "SonyPoller",
             "tv_adb_host": self.config.tv_adb_host,
@@ -122,6 +138,7 @@ class Poller:
         }
         self.ha.update_state(state, merged_attributes)
         self.last_sent_state = state
+        self.last_sent_at = now
 
 
 def configure_logging(level: str) -> None:
