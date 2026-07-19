@@ -26,8 +26,11 @@ Required:
 
 - Docker Engine
 - Docker Compose v2
-- A Sony/Android TV with ADB/network debugging enabled
+- A Sony/Android TV with Developer Options and ADB/network debugging enabled
+- A stable TV IP address, preferably via DHCP reservation/static lease
 - A Home Assistant long-lived access token
+
+Before starting SonyPoller, make sure the TV is reachable at a stable IP address. ADB connects to the TV by IP/port, so if the TV receives a different DHCP address later, polling will fail until `TV_ADB_HOST` is updated.
 
 ### 2. Clone and configure
 
@@ -47,6 +50,8 @@ HA_URL=http://HOME_ASSISTANT_HOST:8123
 HA_TOKEN=your_home_assistant_long_lived_access_token
 HA_ENTITY_ID=sensor.sony_tv_playback_state
 ```
+
+Use the TV's reserved/static IP for `TV_ADB_HOST`, for example `192.168.0.50:5555`.
 
 ### 3. Start SonyPoller
 
@@ -178,7 +183,17 @@ mode: single
 
 ## Sony/Android TV setup
 
-### 1. Enable Developer Options
+### 1. Give the TV a stable IP address
+
+SonyPoller connects to the TV over ADB using `TV_ADB_HOST`, for example:
+
+```env
+TV_ADB_HOST=192.168.0.50:5555
+```
+
+Reserve the TV's IP address in your router/DHCP server, or configure a static IP on the TV. If the TV changes IP later, SonyPoller will not be able to connect until `.env` is updated.
+
+### 2. Enable Developer Options
 
 On the TV:
 
@@ -186,7 +201,7 @@ On the TV:
 2. Go to **System** / **Device Preferences** / **About**. The exact menu varies by Android TV version.
 3. Select **Build** repeatedly until Developer Options are enabled.
 
-### 2. Enable ADB/network debugging
+### 3. Enable ADB/network debugging
 
 In **Developer Options**:
 
@@ -194,9 +209,7 @@ In **Developer Options**:
 2. Enable **Network debugging** / **Wireless debugging** if available.
 3. Confirm the TV is reachable on TCP port `5555`.
 
-Recommended: give the TV a DHCP reservation/static IP, then use that address in `TV_ADB_HOST`, for example `TV_IP_ADDRESS:5555`.
-
-### 3. Authorize the container's ADB key
+### 4. Authorize the container's ADB key
 
 The TV must trust the ADB key used by the container.
 
@@ -269,5 +282,6 @@ python app.py
 ## Notes
 
 - Keep `.env` and `adb/.android/adbkey*` private.
-- If the TV changes IP, update `TV_ADB_HOST`.
+- Use a DHCP reservation/static IP for the TV.
+- If the TV changes IP, update `TV_ADB_HOST` and restart the container.
 - If healthcheck is unhealthy right after first boot, check whether the TV has accepted the ADB prompt. Classic Android TV ceremony: press OK, appease the prompt, profit.
