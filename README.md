@@ -105,10 +105,11 @@ Home Assistant will create the entity automatically after the first successful u
 
 States are:
 
-- `playing`
-- `paused`
-- `idle`
-- `unknown`
+- `playing` — active media playback.
+- `paused` — media session paused.
+- `idle` — TV is on/awake but no media is actively playing.
+- `off` — TV/display is asleep or powered off.
+- `unknown` — SonyPoller cannot determine the current state after repeated failed polls.
 
 You can then use `sensor.sony_tv_playback_state` in dashboards, automations, templates, and history.
 
