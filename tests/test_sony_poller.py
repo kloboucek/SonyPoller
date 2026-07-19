@@ -325,9 +325,12 @@ class SonyPollerTests(unittest.TestCase):
         )
         ha = DummyHa()
         poller = Poller(DummyAdb(["playing", "playing"]), ha, HealthState(), config)
-        poller.tick()
-        poller.last_sent_at -= 61
-        poller.tick()
+        with patch(
+            "sony_poller.main.time.monotonic",
+            side_effect=[1000.0, 1000.001, 1000.002, 1061.0, 1061.001, 1061.002],
+        ):
+            poller.tick()
+            poller.tick()
 
         self.assertEqual([call[0] for call in ha.calls], ["playing", "playing"])
 
